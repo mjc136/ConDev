@@ -34,9 +34,20 @@ import (
 )
 
 // Place a barrier in this function --use Mutex's and Semaphores
-func doStuff(goNum int, wg *sync.WaitGroup) bool {
+func doStuff(goNum, arrived, max *int, wg *sync.WaitGroup, sharedLock *sync.Mutex, theSem *semaphore.Weighted, ctx context.Context) bool {
 	time.Sleep(time.Second)
 	fmt.Println("Part A", goNum)
+	sharedLock.Lock()
+	*arrived++
+	if *arrived == *max {
+		theSem.Release(1)
+		sharedLock.Unlock()
+		theSem.Acquire(ctx, 1)
+	} else {
+		sharedLock.Unlock()
+		theSem.Acquire(ctx, 1)
+		theSem.Release(1)
+	}
 	//we wait here until everyone has completed part A
 	fmt.Println("PartB", goNum)
 	wg.Done()
@@ -45,6 +56,9 @@ func doStuff(goNum int, wg *sync.WaitGroup) bool {
 
 func main() {
 	totalRoutines := 10
+
+	arrived := 0
+
 	var wg sync.WaitGroup
 	wg.Add(totalRoutines)
 	//we will need some of these
@@ -54,7 +68,7 @@ func main() {
 	theLock.Lock()
 	sem.Acquire(ctx, 1)
 	for i := range totalRoutines { //create the go Routines here
-		go doStuff(i, &wg)
+		go doStuff(&i, &arrived, &totalRoutines, &wg, &theLock, sem, ctx)
 	}
 	sem.Release(1)
 	theLock.Unlock()

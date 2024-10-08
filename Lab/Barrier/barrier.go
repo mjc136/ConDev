@@ -27,38 +27,26 @@ package main
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"sync"
 	"time"
-
-	"golang.org/x/sync/semaphore"
 )
 
 // Place a barrier in this function --use Mutex's and Semaphores
-func doStuff(goNum, arrived, max *int, wg *sync.WaitGroup, sharedLock *sync.Mutex, theSem *semaphore.Weighted, ctx context.Context) bool {
+func doStuff(goNum int, wg *sync.WaitGroup, channel chan int) bool {
 	time.Sleep(time.Second)
+
+	channel <- goNum
+
 	fmt.Println("Part A", goNum)
-	sharedLock.Lock()
-	*arrived++
-	if *arrived == *max {
-		theSem.Release(1)
-		sharedLock.Unlock()
-		theSem.Acquire(ctx, 1)
-	} else {
-		sharedLock.Unlock()
-		theSem.Acquire(ctx, 1)
-		theSem.Release(1)
-	}
-	//we wait here until everyone has completed part A
-	fmt.Println("PartB", goNum)
+
+	fmt.Println("Part B", goNum)
 	wg.Done()
 	return true
 }
 
 func main() {
 	totalRoutines := 10
-
-	arrived := 0
-
 	var wg sync.WaitGroup
 	wg.Add(totalRoutines)
 	//we will need some of these
@@ -67,8 +55,11 @@ func main() {
 	sem := semaphore.NewWeighted(int64(totalRoutines))
 	theLock.Lock()
 	sem.Acquire(ctx, 1)
-	for i := range totalRoutines { //create the go Routines here
-		go doStuff(&i, &arrived, &totalRoutines, &wg, &theLock, sem, ctx)
+
+	channel := make(chan int, 10)
+
+	for i := 0; i < totalRoutines; i++ {
+		go doStuff(i, &wg, channel)
 	}
 	sem.Release(1)
 	theLock.Unlock()

@@ -32,23 +32,36 @@ import (
 
 // Place a barrier in this function --use Mutex's and Semaphores
 func doStuff(goNum int, arrived *int, max int, wg *sync.WaitGroup, sharedLock *sync.Mutex, theChan chan bool) bool {
+	for i := 1; i < 3; i++ {
+		time.Sleep(time.Second)
+		fmt.Println("Part A", goNum)
+		//we wait here until everyone has completed part A
+		sharedLock.Lock()
+		*arrived++
+		if *arrived == 10 { //last to arrive -signal others to go
+			sharedLock.Unlock() //unlock before any potentially blocking code
+			theChan <- true
+			<-theChan
+		} else { //not all here yet we wait until signal
+			sharedLock.Unlock() //unlock before any potentially blocking code
+			<-theChan
+			theChan <- true //once we get through send signal to next routine to continue
+		} //end of if-else
 
-	time.Sleep(time.Second)
-	fmt.Println("Part A", goNum)
-	//we wait here until everyone has completed part A
-	sharedLock.Lock()
-	*arrived++
-	if *arrived == 10 { //last to arrive -signal others to go
-		sharedLock.Unlock() //unlock before any potentially blocking code
-		theChan <- true
-		<-theChan
-	} else { //not all here yet we wait until signal
-		sharedLock.Unlock() //unlock before any potentially blocking code
-		<-theChan
-		theChan <- true //once we get through send signal to next routine to continue
-	} //end of if-else
-	fmt.Println("PartB", goNum)
-
+		// everything is waiting here until the threads are finished
+		sharedLock.Lock()
+		*arrived--
+		if *arrived == 0 { // checking if all have arrived
+			sharedLock.Unlock() // unlocking to prevent a deadlock
+			theChan <- true
+			<-theChan // Setting it to wait for a signal
+		} else {
+			sharedLock.Unlock() // unlocking to prevent a deadlock
+			<-theChan
+			theChan <- true // This is sending a signal to the next routine
+		}
+		fmt.Println("PartB", goNum)
+	}
 	wg.Done()
 	return true
 } //end-doStuff

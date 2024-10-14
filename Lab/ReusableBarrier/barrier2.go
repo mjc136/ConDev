@@ -17,9 +17,8 @@
 //--------------------------------------------
 // Author: Joseph Kehoe (Joseph.Kehoe@setu.ie)
 // Created on 30/9/2024
-// Modified by: Michael Cullen
+// Modified by: Michael Cullen, Aaron Doyle, Ronan Green
 // Issues:
-// The barrier is not implemented!
 //--------------------------------------------
 
 package main
@@ -38,7 +37,7 @@ func doStuff(goNum int, arrived *int, max int, wg *sync.WaitGroup, sharedLock *s
 		//we wait here until everyone has completed part A
 		sharedLock.Lock()
 		*arrived++
-		if *arrived == 10 { //last to arrive -signal others to go
+		if *arrived == max { //last to arrive -signal others to go
 			sharedLock.Unlock() //unlock before any potentially blocking code
 			theChan <- true
 			<-theChan

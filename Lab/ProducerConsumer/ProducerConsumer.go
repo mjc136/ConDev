@@ -12,7 +12,7 @@ func Producer() {
 }
 
 func doStuff() {
-	
+
 }
 
 func main() {

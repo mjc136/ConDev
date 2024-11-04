@@ -4,24 +4,25 @@ import (
 	"sync"
 )
 
+const (
+	numThreads = 100
+	size       = 20
+)
+
+// consumer gets events from the channel and processes them
 func Consumer() {
 
 }
+
+// producer creates events and sends them to the channel
 func Producer() {
 
 }
 
-func doStuff() {
-
-}
-
 func main() {
-	totalRoutines := 10
-	arrived := 0
 	var wg sync.WaitGroup
-	wg.Add(totalRoutines)
-	var theLock sync.Mutex
-	for i := 0; i < totalRoutines; i++ {
-		go doStuff()
-	}
+	theChan := make(chan bool) //use unbuffered channel in place of semaphore
+
+	wg.Wait()
+	close(theChan)
 }

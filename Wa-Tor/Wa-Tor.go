@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"image/color"
+	"math/rand"
 )
 
 const (
@@ -16,6 +17,12 @@ var (
 	cellXSize = WindowXSize / xdim
 	cellYSize = WindowYSize / ydim
 	recArray  [xdim][ydim]Rectangle
+)
+
+var (
+	fishColor  = color.RGBA{255, 255, 0, 255} // YELLOW
+	sharkColor = color.RGBA{255, 0, 0, 255}   // RED
+	waterColor = color.RGBA{0, 41, 58, 255}   // Blue
 )
 
 // Rectangle struct to represent each cell
@@ -59,17 +66,32 @@ func drawRectangle(screen *ebiten.Image, rect Rectangle) {
 	screen.DrawImage(img, op)
 }
 
+func drawFish(screen *ebiten.Image) {
+
+}
+
+func drawShark(screen *ebiten.Image) {
+
+}
+
+func drawWater(screen *ebiten.Image) {
+
+}
+
 func main() {
 	// Initialize the rectangles
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
-			id := i + k
 			var rectColor color.Color
-			if id%2 == 0 {
-				rectColor = color.RGBA{0, 255, 0, 255} // Green for even
+			var num = rand.Intn(100)
+			if num < 70 {
+				rectColor = waterColor
+			} else if num < 90 {
+				rectColor = fishColor
 			} else {
-				rectColor = color.RGBA{0, 0, 255, 255} // Blue for odd
+				rectColor = sharkColor
 			}
+
 			recArray[i][k] = Rectangle{
 				x:     i * cellXSize,
 				y:     k * cellYSize,

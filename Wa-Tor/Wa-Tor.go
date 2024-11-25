@@ -1,9 +1,12 @@
 package main
 
 import (
-	"github.com/hajimehoshi/ebiten/v2"
 	"image/color"
+	"log"
 	"math/rand"
+	"time"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 const (
@@ -17,12 +20,13 @@ var (
 	cellXSize = WindowXSize / xdim
 	cellYSize = WindowYSize / ydim
 	recArray  [xdim][ydim]Rectangle
+	rectImg   *ebiten.Image
 )
 
 var (
 	fishColor  = color.RGBA{255, 255, 0, 255} // YELLOW
 	sharkColor = color.RGBA{255, 0, 0, 255}   // RED
-	waterColor = color.RGBA{0, 41, 58, 255}   // Blue
+	waterColor = color.RGBA{0, 41, 58, 255}   // BLUE
 )
 
 // Rectangle struct to represent each cell
@@ -35,58 +39,79 @@ type Rectangle struct {
 // Game implements the Ebiten Game interface
 type Game struct{}
 
-// Update updates the game logic (called every frame)
 func (g *Game) Update() error {
-	// No game logic for now
+	start := time.Now() // Measure update time
+	for i := 0; i < xdim; i++ {
+		for k := 0; k < ydim; k++ {
+			rect := &recArray[i][k]
+			if rect.color == fishColor {
+				moveEntity(i, k, fishColor)
+			} else if rect.color == sharkColor {
+				moveEntity(i, k, sharkColor)
+			}
+		}
+	}
+	log.Printf("Update took: %s", time.Since(start))
 	return nil
 }
 
-// Draw renders the graphics (called every frame)
 func (g *Game) Draw(screen *ebiten.Image) {
-	// Loop through each rectangle and draw it
+	start := time.Now() // Measure draw time
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
 			drawRectangle(screen, recArray[i][k])
 		}
 	}
+	log.Printf("Draw took: %s", time.Since(start))
 }
 
-// Layout specifies the screen dimensions
 func (g *Game) Layout(_, _ int) (int, int) {
 	return WindowXSize, WindowYSize
 }
 
-// drawRectangle draws a single rectangle on the screen
 func drawRectangle(screen *ebiten.Image, rect Rectangle) {
-	// Create a new rectangle image
-	img := ebiten.NewImage(rect.w, rect.h)
-	img.Fill(rect.color)
+	rectImg.Fill(rect.color)
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(rect.x), float64(rect.y))
-	screen.DrawImage(img, op)
+	screen.DrawImage(rectImg, op)
 }
 
-func drawFish(screen *ebiten.Image) {
+func moveEntity(x, y int, entityColor color.Color) {
+	dir := rand.Intn(4)
+	newX, newY := x, y
 
-}
+	switch dir {
+	case 0:
+		newY = (y - 1 + ydim) % ydim
+	case 1:
+		newX = (x + 1) % xdim
+	case 2:
+		newY = (y + 1) % ydim
+	case 3:
+		newX = (x - 1 + xdim) % xdim
+	}
 
-func drawShark(screen *ebiten.Image) {
-
-}
-
-func drawWater(screen *ebiten.Image) {
-
+	if recArray[newX][newY].color == waterColor {
+		log.Printf("Entity at (%d, %d) moved to (%d, %d)", x, y, newX, newY)
+		recArray[newX][newY].color = entityColor
+		recArray[x][y].color = waterColor
+	} else {
+		log.Printf("Entity at (%d, %d) could not move", x, y)
+	}
 }
 
 func main() {
-	// Initialize the rectangles
+	// Initialize rectangle image for reuse
+	rectImg = ebiten.NewImage(cellXSize, cellYSize)
+
+	// Initialize the grid
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
 			var rectColor color.Color
-			var num = rand.Intn(100)
-			if num < 70 {
+			num := rand.Intn(100)
+			if num < 90 {
 				rectColor = waterColor
-			} else if num < 90 {
+			} else if num < 97 {
 				rectColor = fishColor
 			} else {
 				rectColor = sharkColor
@@ -102,10 +127,7 @@ func main() {
 		}
 	}
 
-	// Create a new game instance
 	game := &Game{}
-
-	// Run the game
 	ebiten.SetWindowSize(WindowXSize, WindowYSize)
 	ebiten.SetWindowTitle("Go Wa-Tor World")
 	if err := ebiten.RunGame(game); err != nil {

@@ -24,8 +24,8 @@ const (
 	WindowYSize = 600 // Window height in pixels.
 	NumShark    = 10  // Starting population of sharks.
 	NumFish     = 50  // Starting population of fish.
-	fishBreed   = 3   // Steps for fish to reproduce
-	sharkBreed  = 6   // Steps for sharks to reproduce
+	fishBreed   = 50  // Steps for fish to reproduce
+	sharkBreed  = 110 // Steps for sharks to reproduce
 	sharkStarve = 100 // Steps before a shark starves
 )
 
@@ -48,7 +48,7 @@ type Rectangle struct {
 	w, h   int
 	color  color.Color
 	starve int
-	//breed  int
+	breed  int
 }
 
 // Game implements the Ebiten Game interface
@@ -114,6 +114,7 @@ func placeEntities(num int, entityColor color.Color) {
 			if entityColor == sharkColor {
 				recArray[x][y].starve = sharkStarve // Initialise shark's starvation counter
 			}
+			recArray[x][y].breed = 0
 			count++
 		}
 	}
@@ -142,6 +143,12 @@ func moveFish(x, y int) {
 	if recArray[newX][newY].color == waterColor {
 		recArray[newX][newY].color = fishColor
 		recArray[x][y].color = waterColor
+		recArray[newX][newY].breed = recArray[x][y].breed + 1
+		recArray[x][y].breed = 0
+	}
+	if recArray[newX][newY].breed == fishBreed {
+		recArray[x][y].color = fishColor
+		recArray[x][y].breed = 0
 	}
 }
 
@@ -159,7 +166,13 @@ func moveShark(x, y int) {
 		eatFish(newX, newY)
 		recArray[x][y].color = waterColor
 	}
-
+	recArray[newX][newY].breed = recArray[x][y].breed + 1
+	recArray[x][y].breed = 0
+	if recArray[newX][newY].breed == sharkBreed {
+		recArray[x][y].color = sharkColor
+		recArray[x][y].breed = 0
+		recArray[x][y].starve = sharkStarve
+	}
 }
 
 func checkAdjacent(x, y int) (newx, newy int) {

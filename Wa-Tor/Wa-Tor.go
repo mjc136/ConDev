@@ -22,11 +22,12 @@ const (
 	ydim        = 100
 	WindowXSize = 800 // Window width in pixels.
 	WindowYSize = 600 // Window height in pixels.
-	NumShark    = 10  // Starting population of sharks.
-	NumFish     = 50  // Starting population of fish.
+	NumShark    = 15  // Starting population of sharks.
+	NumFish     = 100 // Starting population of fish.
 	fishBreed   = 50  // Steps for fish to reproduce
-	sharkBreed  = 110 // Steps for sharks to reproduce
-	sharkStarve = 100 // Steps before a shark starves
+	sharkBreed  = 100 // Steps for sharks to reproduce
+	sharkStarve = 75  // Steps before a shark starves
+	foodEnergy  = 100
 )
 
 var (
@@ -112,7 +113,7 @@ func placeEntities(num int, entityColor color.Color) {
 		if rect.color == waterColor {
 			recArray[x][y].color = entityColor
 			if entityColor == sharkColor {
-				recArray[x][y].starve = sharkStarve // Initialise shark's starvation counter
+				recArray[x][y].starve += foodEnergy // Initialise shark's starvation counter
 			}
 			recArray[x][y].breed = 0
 			count++
@@ -149,6 +150,7 @@ func moveFish(x, y int) {
 	if recArray[newX][newY].breed == fishBreed {
 		recArray[x][y].color = fishColor
 		recArray[x][y].breed = 0
+		recArray[newX][newY].breed = 0
 	}
 }
 
@@ -172,6 +174,7 @@ func moveShark(x, y int) {
 		recArray[x][y].color = sharkColor
 		recArray[x][y].breed = 0
 		recArray[x][y].starve = sharkStarve
+		recArray[newX][newY].breed = 0
 	}
 }
 

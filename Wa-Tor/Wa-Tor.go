@@ -18,12 +18,15 @@ import (
 
 // Simulation parameters.
 const (
-	NumShark    = 10 // Starting population of sharks.
-	NumFish     = 50 // Starting population of fish.
 	xdim        = 100
 	ydim        = 100
 	WindowXSize = 800 // Window width in pixels.
 	WindowYSize = 600 // Window height in pixels.
+	NumShark    = 10  // Starting population of sharks.
+	NumFish     = 50  // Starting population of fish.
+	fishBreed   = 3   // Steps for fish to reproduce
+	sharkBreed  = 6   // Steps for sharks to reproduce
+	sharkStarve = 100 // Steps before a shark starves
 )
 
 var (
@@ -41,9 +44,11 @@ var (
 
 // Rectangle struct to represent each cell
 type Rectangle struct {
-	x, y  int
-	w, h  int
-	color color.Color
+	x, y   int
+	w, h   int
+	color  color.Color
+	starve int
+	//breed  int
 }
 
 // Game implements the Ebiten Game interface
@@ -60,7 +65,11 @@ func (g *Game) Update() error {
 			if rect.color == fishColor {
 				moveFish(i, k)
 			} else if rect.color == sharkColor {
-				moveShark(i, k)
+				if rect.starve > 0 {
+					moveShark(i, k)
+				} else {
+					rect.color = waterColor
+				}
 			}
 		}
 	}
@@ -78,6 +87,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 }
 
+// Layout defines the layout of the game window.
+//
+// It returns the width and height of the game window in pixels.
 func (g *Game) Layout(_, _ int) (int, int) {
 	return WindowXSize, WindowYSize
 }
@@ -99,6 +111,9 @@ func placeEntities(num int, entityColor color.Color) {
 
 		if rect.color == waterColor {
 			recArray[x][y].color = entityColor
+			if entityColor == sharkColor {
+				recArray[x][y].starve = sharkStarve // Initialise shark's starvation counter
+			}
 			count++
 		}
 	}
@@ -131,10 +146,44 @@ func moveFish(x, y int) {
 }
 
 func moveShark(x, y int) {
-	newX, newY := moveEntity(x, y)
-	if recArray[newX][newY].color == waterColor {
-		recArray[newX][newY].color = sharkColor
+	newX, newY := checkAdjacent(x, y)
+	if newX == x && newY == y {
+		newX, newY = moveEntity(x, y)
+		if recArray[newX][newY].color == waterColor {
+			recArray[newX][newY].color = sharkColor
+			recArray[newX][newY].starve = recArray[x][y].starve - 1
+			recArray[x][y].color = waterColor
+			recArray[x][y].starve = 0
+		}
+	} else {
+		eatFish(newX, newY)
 		recArray[x][y].color = waterColor
+	}
+
+}
+
+func checkAdjacent(x, y int) (newx, newy int) {
+	// Default to the current position (no fish found)
+	newx, newy = x, y
+
+	// Check the adjacent cells for a fish
+	if recArray[(x+1+xdim)%xdim][y].color == fishColor {
+		newx, newy = (x+1+xdim)%xdim, y // East
+	} else if recArray[(x-1+xdim)%xdim][y].color == fishColor {
+		newx, newy = (x-1+xdim)%xdim, y // West
+	} else if recArray[x][(y+1+ydim)%ydim].color == fishColor {
+		newx, newy = x, (y+1+ydim)%ydim // South
+	} else if recArray[x][(y-1+ydim)%ydim].color == fishColor {
+		newx, newy = x, (y-1+ydim)%ydim // North
+	}
+
+	return newx, newy
+}
+
+func eatFish(x, y int) {
+	if recArray[x][y].color == fishColor {
+		recArray[x][y].color = sharkColor
+		recArray[x][y].starve = sharkStarve
 	}
 }
 

@@ -18,34 +18,35 @@ import (
 
 // Simulation parameters.
 const (
-	NumShark    = 10  // Starting population of sharks.
-	NumFish     = 50  // Starting population of fish.
-	GridSize    = 100 // Dimensions of the world (GridSize x GridSize).
+	NumShark    = 10 // Starting population of sharks.
+	NumFish     = 50 // Starting population of fish.
+	xdim        = 100
+	ydim        = 100
 	WindowXSize = 800 // Window width in pixels.
 	WindowYSize = 600 // Window height in pixels.
 )
 
 var (
-	cellXSize = WindowXSize / GridSize      // Width of each cell in pixels.
-	cellYSize = WindowYSize / GridSize      // Height of each cell in pixels.
-	recArray  [GridSize][GridSize]Rectangle // 2D array representing the grid of rectangles.
-	rectImg   *ebiten.Image                 // Image used to draw each rectangle.
+	cellXSize = WindowXSize / xdim
+	cellYSize = WindowYSize / ydim
+	recArray  [xdim][ydim]Rectangle
+	rectImg   *ebiten.Image
 )
 
 var (
-	fishColor  = color.RGBA{255, 255, 0, 255} // Color representing fish (yellow).
-	sharkColor = color.RGBA{255, 0, 0, 255}   // Color representing sharks (red).
-	waterColor = color.RGBA{0, 41, 58, 255}   // Color representing water (blue).
+	fishColor  = color.RGBA{255, 255, 0, 255} // YELLOW
+	sharkColor = color.RGBA{255, 0, 0, 255}   // RED
+	waterColor = color.RGBA{0, 41, 58, 255}   // BLUE
 )
 
-// Rectangle represents a rectangular cell in the simulation grid.
+// Rectangle struct to represent each cell
 type Rectangle struct {
-	X, Y  int         // Position of the rectangle in the grid (top-left corner).
-	W, H  int         // Width and height of the rectangle.
-	Color color.Color // Color of the rectangle (fish, shark, or water).
+	x, y  int
+	w, h  int
+	color color.Color
 }
 
-// Game implements the Ebiten Game interface for the Wa-Tor simulation.
+// Game implements the Ebiten Game interface
 type Game struct{}
 
 // Update updates the state of the simulation.
@@ -53,12 +54,12 @@ type Game struct{}
 // This function is called once per frame. It updates the positions
 // and states of all entities in the grid (fish and sharks).
 func (g *Game) Update() error {
-	for i := 0; i < GridSize; i++ {
-		for k := 0; k < GridSize; k++ {
+	for i := 0; i < xdim; i++ {
+		for k := 0; k < ydim; k++ {
 			rect := &recArray[i][k]
-			if rect.Color == fishColor {
+			if rect.color == fishColor {
 				moveFish(i, k)
-			} else if rect.Color == sharkColor {
+			} else if rect.color == sharkColor {
 				moveShark(i, k)
 			}
 		}
@@ -70,99 +71,87 @@ func (g *Game) Update() error {
 //
 // Each cell in the grid is drawn using its current color (fish, shark, or water).
 func (g *Game) Draw(screen *ebiten.Image) {
-	for i := 0; i < GridSize; i++ {
-		for k := 0; k < GridSize; k++ {
+	for i := 0; i < xdim; i++ {
+		for k := 0; k < ydim; k++ {
 			drawRectangle(screen, recArray[i][k])
 		}
 	}
 }
 
-// Layout defines the layout of the game window.
-//
-// It returns the width and height of the game window in pixels.
 func (g *Game) Layout(_, _ int) (int, int) {
 	return WindowXSize, WindowYSize
 }
 
-// moveFish moves a fish in the grid.
-//
-// Fish move randomly to adjacent empty cells.
-func moveFish(x, y int) {
-	direction := rand.Intn(4) // Randomly pick a direction
-	newX, newY := x, y
-
-	switch direction {
-	case 0: // Move north
-		newY = (y - 1 + GridSize) % GridSize
-	case 1: // Move east
-		newX = (x + 1) % GridSize
-	case 2: // Move south
-		newY = (y + 1) % GridSize
-	case 3: // Move west
-		newX = (x - 1 + GridSize) % GridSize
-	}
-
-	// Check if the target cell is empty (water) before moving
-	if recArray[newX][newY].Color == waterColor {
-		// Move the fish
-		recArray[newX][newY] = recArray[x][y]
-		recArray[x][y].Color = waterColor // Reset the original cell to water
-	}
-}
-
-// moveShark moves a shark in the grid.
-//
-// Sharks move randomly to adjacent empty cells.
-func moveShark(x, y int) {
-	direction := rand.Intn(4) // Randomly pick a direction
-	newX, newY := x, y
-
-	switch direction {
-	case 0: // Move north
-		newY = (y - 1 + GridSize) % GridSize
-	case 1: // Move east
-		newX = (x + 1) % GridSize
-	case 2: // Move south
-		newY = (y + 1) % GridSize
-	case 3: // Move west
-		newX = (x - 1 + GridSize) % GridSize
-	}
-
-	// Check if the target cell is empty (water) before moving
-	if recArray[newX][newY].Color == waterColor {
-		// Move the shark
-		recArray[newX][newY] = recArray[x][y]
-		recArray[x][y].Color = waterColor // Reset the original cell to water
-	}
-}
-
-// drawRectangle draws a single rectangle to the screen.
-//
-// The rectangle's color represents its state (water, fish, or shark).
 func drawRectangle(screen *ebiten.Image, rect Rectangle) {
-	rectImg.Fill(rect.Color)
+	rectImg.Fill(rect.color)
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(float64(rect.X), float64(rect.Y))
+	op.GeoM.Translate(float64(rect.x), float64(rect.y))
 	screen.DrawImage(rectImg, op)
 }
 
-// main initializes and runs the Wa-Tor simulation.
-//
-// This function sets up the grid, populates it with initial entities,
-// and starts the Ebiten game loop.
+func placeEntities(num int, entityColor color.Color) {
+	count := 0
+	for count < num {
+		x := rand.Intn(xdim)
+		y := rand.Intn(ydim)
+
+		rect := &recArray[x][y]
+
+		if rect.color == waterColor {
+			recArray[x][y].color = entityColor
+			count++
+		}
+	}
+}
+
+func moveEntity(x, y int) (newX, newY int) {
+	dir := rand.Intn(4)
+	newX, newY = x, y
+
+	switch dir {
+	case 0:
+		newY = (y - 1 + ydim) % ydim
+	case 1:
+		newX = (x + 1) % xdim
+	case 2:
+		newY = (y + 1) % ydim
+	case 3:
+		newX = (x - 1 + xdim) % xdim
+	}
+
+	return newX, newY
+}
+
+func moveFish(x, y int) {
+	newX, newY := moveEntity(x, y)
+	if recArray[newX][newY].color == waterColor {
+		recArray[newX][newY].color = fishColor
+		recArray[x][y].color = waterColor
+	}
+}
+
+func moveShark(x, y int) {
+	newX, newY := moveEntity(x, y)
+	if recArray[newX][newY].color == waterColor {
+		recArray[newX][newY].color = sharkColor
+		recArray[x][y].color = waterColor
+	}
+}
+
 func main() {
-	// Initialize the rectangle image for reuse
+	// Initialize rectangle image for reuse
 	rectImg = ebiten.NewImage(cellXSize, cellYSize)
 
 	// Initialize the grid
-	for i := 0; i < GridSize; i++ {
-		for k := 0; k < GridSize; k++ {
+	for i := 0; i < xdim; i++ {
+		for k := 0; k < ydim; k++ {
+
 			recArray[i][k] = Rectangle{
-				X:     i * cellXSize,
-				Y:     k * cellYSize,
-				W:     cellXSize,
-				H:     cellYSize,
-				Color: waterColor, // Default to water
+				x:     i * cellXSize,
+				y:     k * cellYSize,
+				w:     cellXSize,
+				h:     cellYSize,
+				color: waterColor,
 			}
 		}
 	}
@@ -173,24 +162,8 @@ func main() {
 
 	game := &Game{}
 	ebiten.SetWindowSize(WindowXSize, WindowYSize)
-	ebiten.SetWindowTitle("Wa-Tor")
+	ebiten.SetWindowTitle("Go Wa-Tor World")
 	if err := ebiten.RunGame(game); err != nil {
 		panic(err)
-	}
-}
-
-// placeEntities places entities (fish or sharks) randomly on the grid.
-//
-// It ensures that entities are only placed in empty cells.
-func placeEntities(num int, entityColor color.Color) {
-	count := 0
-	for count < num {
-		x := rand.Intn(GridSize)
-		y := rand.Intn(GridSize)
-
-		if recArray[x][y].Color == waterColor {
-			recArray[x][y].Color = entityColor
-			count++
-		}
 	}
 }

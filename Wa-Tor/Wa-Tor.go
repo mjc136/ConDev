@@ -2,63 +2,61 @@
 //
 // This program simulates a Wa-Tor world, where fish and sharks interact
 // in a 2D grid. Sharks and fish move randomly, interacting with their environment.
-//
-// author Michael Cullen
-// student_number C00261635
-// date 2024-11-25
 
-package main
+package wator
 
 import (
 	"image/color"
 	"math/rand"
+	"runtime"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 // Simulation parameters.
 const (
-	xdim        = 100
-	ydim        = 100
+	xdim        = 100 // Grid width.
+	ydim        = 100 // Grid height.
 	WindowXSize = 800 // Window width in pixels.
 	WindowYSize = 600 // Window height in pixels.
 	NumShark    = 15  // Starting population of sharks.
 	NumFish     = 100 // Starting population of fish.
-	fishBreed   = 50  // Steps for fish to reproduce
-	sharkBreed  = 100 // Steps for sharks to reproduce
-	sharkStarve = 75  // Steps before a shark starves
-	foodEnergy  = 100
+	fishBreed   = 50  // Steps required for fish to reproduce.
+	sharkBreed  = 100 // Steps required for sharks to reproduce.
+	sharkStarve = 75  // Steps before a shark starves without eating.
+	foodEnergy  = 100 // Energy gained by a shark after eating a fish.
+	threads     = 1   // Number of threads used by the simulation.
 )
 
 var (
-	cellXSize = WindowXSize / xdim
-	cellYSize = WindowYSize / ydim
-	recArray  [xdim][ydim]Rectangle
-	rectImg   *ebiten.Image
+	cellXSize = WindowXSize / xdim  // Width of each cell in pixels.
+	cellYSize = WindowYSize / ydim  // Height of each cell in pixels.
+	recArray  [xdim][ydim]Rectangle // Grid representing the simulation world.
+	rectImg   *ebiten.Image         // Shared rectangle image used for drawing cells.
 )
 
 var (
-	fishColor  = color.RGBA{255, 255, 0, 255} // YELLOW
-	sharkColor = color.RGBA{255, 0, 0, 255}   // RED
-	waterColor = color.RGBA{0, 41, 58, 255}   // BLUE
+	fishColor  = color.RGBA{255, 255, 0, 255} // Color representing fish (yellow).
+	sharkColor = color.RGBA{255, 0, 0, 255}   // Color representing sharks (red).
+	waterColor = color.RGBA{0, 41, 58, 255}   // Color representing water (blue).
 )
 
-// Rectangle struct to represent each cell
+// Rectangle represents a rectangular cell in the simulation grid.
 type Rectangle struct {
-	x, y   int
-	w, h   int
-	color  color.Color
-	starve int
-	breed  int
+	x, y   int         // Top-left position of the rectangle.
+	w, h   int         // Width and height of the rectangle.
+	color  color.Color // Color of the rectangle (fish, shark, or water).
+	starve int         // Starvation counter for sharks.
+	breed  int         // Breeding counter for both fish and sharks.
 }
 
-// Game implements the Ebiten Game interface
+// Game implements the Ebiten Game interface for the Wa-Tor simulation.
 type Game struct{}
 
 // Update updates the state of the simulation.
 //
-// This function is called once per frame. It updates the positions
-// and states of all entities in the grid (fish and sharks).
+// Update is called once per frame. It moves fish and sharks, updates their
+// states, and handles reproduction and starvation logic.
 func (g *Game) Update() error {
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
@@ -69,7 +67,7 @@ func (g *Game) Update() error {
 				if rect.starve > 0 {
 					moveShark(i, k)
 				} else {
-					rect.color = waterColor
+					rect.color = waterColor // Shark starves and the cell becomes water.
 				}
 			}
 		}
@@ -79,7 +77,7 @@ func (g *Game) Update() error {
 
 // Draw draws the simulation grid to the screen.
 //
-// Each cell in the grid is drawn using its current color (fish, shark, or water).
+// Each cell is drawn with its current color, representing fish, sharks, or water.
 func (g *Game) Draw(screen *ebiten.Image) {
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
@@ -90,11 +88,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 // Layout defines the layout of the game window.
 //
-// It returns the width and height of the game window in pixels.
+// Layout returns the width and height of the game window in pixels.
 func (g *Game) Layout(_, _ int) (int, int) {
 	return WindowXSize, WindowYSize
 }
 
+// drawRectangle draws a single rectangle to the screen.
+//
+// The rectangle's color is used to represent its state (fish, shark, or water).
 func drawRectangle(screen *ebiten.Image, rect Rectangle) {
 	rectImg.Fill(rect.color)
 	op := &ebiten.DrawImageOptions{}
@@ -102,6 +103,8 @@ func drawRectangle(screen *ebiten.Image, rect Rectangle) {
 	screen.DrawImage(rectImg, op)
 }
 
+// placeEntities randomly places a specified number of entities (fish or sharks)
+// on the grid. Entities are placed only in empty (water) cells.
 func placeEntities(num int, entityColor color.Color) {
 	count := 0
 	for count < num {
@@ -113,14 +116,17 @@ func placeEntities(num int, entityColor color.Color) {
 		if rect.color == waterColor {
 			recArray[x][y].color = entityColor
 			if entityColor == sharkColor {
-				recArray[x][y].starve += foodEnergy // Initialise shark's starvation counter
+				recArray[x][y].starve = foodEnergy // Initialize shark's starvation counter.
 			}
-			recArray[x][y].breed = 0
+			recArray[x][y].breed = 0 // Initialize breeding counter.
 			count++
 		}
 	}
 }
 
+// moveEntity moves an entity to an adjacent cell in a random direction.
+//
+// The function wraps around the edges of the grid (toroidal behavior).
 func moveEntity(x, y int) (newX, newY int) {
 	dir := rand.Intn(4)
 	newX, newY = x, y
@@ -139,6 +145,9 @@ func moveEntity(x, y int) (newX, newY int) {
 	return newX, newY
 }
 
+// moveFish moves a fish to an adjacent water cell.
+//
+// If the fish reaches its breeding threshold, it reproduces in its original cell.
 func moveFish(x, y int) {
 	newX, newY := moveEntity(x, y)
 	if recArray[newX][newY].color == waterColor {
@@ -154,6 +163,10 @@ func moveFish(x, y int) {
 	}
 }
 
+// moveShark moves a shark to an adjacent cell.
+//
+// If a shark eats a fish, its starvation counter is reset.
+// Sharks reproduce after reaching their breeding threshold.
 func moveShark(x, y int) {
 	newX, newY := checkAdjacent(x, y)
 	if newX == x && newY == y {
@@ -178,11 +191,13 @@ func moveShark(x, y int) {
 	}
 }
 
+// checkAdjacent checks for fish in the adjacent cells.
+//
+// If a fish is found, it returns the coordinates of the fish. Otherwise,
+// it returns the current cell's coordinates.
 func checkAdjacent(x, y int) (newx, newy int) {
-	// Default to the current position (no fish found)
 	newx, newy = x, y
 
-	// Check the adjacent cells for a fish
 	if recArray[(x+1+xdim)%xdim][y].color == fishColor {
 		newx, newy = (x+1+xdim)%xdim, y // East
 	} else if recArray[(x-1+xdim)%xdim][y].color == fishColor {
@@ -196,6 +211,9 @@ func checkAdjacent(x, y int) (newx, newy int) {
 	return newx, newy
 }
 
+// eatFish allows a shark to eat a fish at a specified cell.
+//
+// The shark's starvation counter is reset after eating.
 func eatFish(x, y int) {
 	if recArray[x][y].color == fishColor {
 		recArray[x][y].color = sharkColor
@@ -203,14 +221,15 @@ func eatFish(x, y int) {
 	}
 }
 
+// main initializes the simulation and runs the game loop.
 func main() {
-	// Initialize rectangle image for reuse
-	rectImg = ebiten.NewImage(cellXSize, cellYSize)
+	runtime.GOMAXPROCS(threads) // Set the number of threads for simulation.
 
-	// Initialize the grid
+	rectImg = ebiten.NewImage(cellXSize, cellYSize) // Initialize shared rectangle image.
+
+	// Initialize the grid.
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
-
 			recArray[i][k] = Rectangle{
 				x:     i * cellXSize,
 				y:     k * cellYSize,
@@ -221,9 +240,8 @@ func main() {
 		}
 	}
 
-	// Populate initial fish and sharks
-	placeEntities(NumFish, fishColor)
-	placeEntities(NumShark, sharkColor)
+	placeEntities(NumFish, fishColor)   // Place initial fish.
+	placeEntities(NumShark, sharkColor) // Place initial sharks.
 
 	game := &Game{}
 	ebiten.SetWindowSize(WindowXSize, WindowYSize)

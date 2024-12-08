@@ -3,29 +3,32 @@
 // This program simulates a Wa-Tor world, where fish and sharks interact
 // in a 2D grid. Sharks and fish move randomly, interacting with their environment.
 
-package wator
+package main
 
 import (
+	"fmt"
 	"image/color"
 	"math/rand"
 	"runtime"
+	"sync"
+
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 // Simulation parameters.
 const (
-	xdim        = 100 // Grid width.
-	ydim        = 100 // Grid height.
-	WindowXSize = 800 // Window width in pixels.
-	WindowYSize = 600 // Window height in pixels.
-	NumShark    = 15  // Starting population of sharks.
-	NumFish     = 100 // Starting population of fish.
-	fishBreed   = 50  // Steps required for fish to reproduce.
-	sharkBreed  = 100 // Steps required for sharks to reproduce.
-	sharkStarve = 75  // Steps before a shark starves without eating.
-	foodEnergy  = 100 // Energy gained by a shark after eating a fish.
-	threads     = 1   // Number of threads used by the simulation.
+	xdim        = 150  // Grid width.
+	ydim        = 150  // Grid height.
+	WindowXSize = 600  // Window width in pixels.
+	WindowYSize = 600  // Window height in pixels.
+	NumShark    = 500  // Starting population of sharks.
+	NumFish     = 1000 // Starting population of fish.
+	fishBreed   = 5    // Steps required for fish to reproduce.
+	sharkBreed  = 10   // Steps required for sharks to reproduce.
+	sharkStarve = 7    // Steps before a shark starves without eating.
+	threads     = 1    // Number of threads used by the simulation.
 )
 
 var (
@@ -58,20 +61,42 @@ type Game struct{}
 // Update is called once per frame. It moves fish and sharks, updates their
 // states, and handles reproduction and starvation logic.
 func (g *Game) Update() error {
-	for i := 0; i < xdim; i++ {
-		for k := 0; k < ydim; k++ {
-			rect := &recArray[i][k]
-			if rect.color == fishColor {
-				moveFish(i, k)
-			} else if rect.color == sharkColor {
-				if rect.starve > 0 {
-					moveShark(i, k)
-				} else {
-					rect.color = waterColor // Shark starves and the cell becomes water.
+	var wg sync.WaitGroup
+
+	rowsPerThread := xdim / threads // Split the rows into sections based on the number of threads
+	for t := 0; t < threads; t++ {
+		startRow := t * rowsPerThread
+		endRow := (t + 1) * rowsPerThread
+		if t == threads-1 { // Handle the remaining rows for the last thread
+			endRow = xdim
+		}
+
+		wg.Add(1)
+		go func(startRow, endRow int) {
+			defer wg.Done()
+			// Process the rows assigned to this goroutine
+			for i := startRow; i < endRow; i++ {
+				for k := 0; k < ydim; k++ {
+					rect := &recArray[i][k]
+					if rect.color == fishColor {
+						moveFish(i, k)
+					} else if rect.color == sharkColor {
+						if rect.starve > 0 {
+							moveShark(i, k)
+						} else {
+							// Shark starves and the cell becomes water.
+							rect.color = waterColor
+							rect.starve = 0
+							rect.breed = 0
+						}
+					}
 				}
 			}
-		}
+		}(startRow, endRow)
 	}
+
+	wg.Wait() // Wait for all goroutines to finish
+
 	return nil
 }
 
@@ -84,6 +109,19 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			drawRectangle(screen, recArray[i][k])
 		}
 	}
+
+	// Draw a background rectangle for the TPS display
+	tpsBackground := ebiten.NewImage(120, 30)    // Width: 120px, Height: 30px
+	tpsBackground.Fill(color.RGBA{0, 0, 0, 180}) // Semi-transparent black background
+
+	// Draw the background rectangle at a fixed position
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(10, 10) // Position at (10, 10)
+	screen.DrawImage(tpsBackground, op)
+
+	// Draw the TPS text over the background
+	msg := fmt.Sprintf("TPS: %.2f", ebiten.ActualTPS())
+	ebitenutil.DebugPrintAt(screen, msg, 20, 20) // Position text within the background
 }
 
 // Layout defines the layout of the game window.
@@ -116,7 +154,7 @@ func placeEntities(num int, entityColor color.Color) {
 		if rect.color == waterColor {
 			recArray[x][y].color = entityColor
 			if entityColor == sharkColor {
-				recArray[x][y].starve = foodEnergy // Initialize shark's starvation counter.
+				recArray[x][y].starve = sharkStarve // Initialize shark's starvation counter.
 			}
 			recArray[x][y].breed = 0 // Initialize breeding counter.
 			count++
@@ -155,6 +193,9 @@ func moveFish(x, y int) {
 		recArray[x][y].color = waterColor
 		recArray[newX][newY].breed = recArray[x][y].breed + 1
 		recArray[x][y].breed = 0
+	} else {
+		// If can't move, just increment breed counter
+		recArray[x][y].breed++
 	}
 	if recArray[newX][newY].breed == fishBreed {
 		recArray[x][y].color = fishColor
@@ -174,16 +215,27 @@ func moveShark(x, y int) {
 		if recArray[newX][newY].color == waterColor {
 			recArray[newX][newY].color = sharkColor
 			recArray[newX][newY].starve = recArray[x][y].starve - 1
+			recArray[newX][newY].breed = recArray[x][y].breed + 1
 			recArray[x][y].color = waterColor
 			recArray[x][y].starve = 0
+			recArray[x][y].breed = 0
+		} else {
+			// If can't move, decrease starve counter
+			recArray[x][y].starve--
+			recArray[x][y].breed++
 		}
 	} else {
+		// Eat the fish
 		eatFish(newX, newY)
+		recArray[newX][newY].breed = recArray[x][y].breed + 1
+		recArray[newX][newY].starve = sharkStarve
 		recArray[x][y].color = waterColor
+		recArray[x][y].starve = 0
+		recArray[x][y].breed = 0
 	}
-	recArray[newX][newY].breed = recArray[x][y].breed + 1
-	recArray[x][y].breed = 0
-	if recArray[newX][newY].breed == sharkBreed {
+
+	if recArray[newX][newY].breed >= sharkBreed {
+		// Reproduce
 		recArray[x][y].color = sharkColor
 		recArray[x][y].breed = 0
 		recArray[x][y].starve = sharkStarve
@@ -218,6 +270,7 @@ func eatFish(x, y int) {
 	if recArray[x][y].color == fishColor {
 		recArray[x][y].color = sharkColor
 		recArray[x][y].starve = sharkStarve
+		recArray[x][y].breed = 0
 	}
 }
 
@@ -226,7 +279,6 @@ func main() {
 	runtime.GOMAXPROCS(threads) // Set the number of threads for simulation.
 
 	rectImg = ebiten.NewImage(cellXSize, cellYSize) // Initialize shared rectangle image.
-
 	// Initialize the grid.
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {

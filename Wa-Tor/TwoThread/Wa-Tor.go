@@ -1,34 +1,30 @@
-// Wa-Tor.go: A Wa-Tor simulation using the Ebiten game engine.
-//
-// This program simulates a Wa-Tor world, where fish and sharks interact
-// in a 2D grid. Sharks and fish move randomly, interacting with their environment.
-
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"image/color"
 	"math/rand"
-	"runtime"
+	"os"
+	"strconv"
 	"sync"
 
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 // Simulation parameters.
 const (
-	xdim        = 150  // Grid width.
-	ydim        = 150  // Grid height.
-	WindowXSize = 600  // Window width in pixels.
-	WindowYSize = 600  // Window height in pixels.
-	NumShark    = 500  // Starting population of sharks.
-	NumFish     = 1000 // Starting population of fish.
-	fishBreed   = 5    // Steps required for fish to reproduce.
-	sharkBreed  = 10   // Steps required for sharks to reproduce.
-	sharkStarve = 7    // Steps before a shark starves without eating.
-	threads     = 1    // Number of threads used by the simulation.
+	xdim        = 100 // Grid width.
+	ydim        = 100 // Grid height.
+	WindowXSize = 800 // Window width in pixels.
+	WindowYSize = 600 // Window height in pixels.
+	NumShark    = 15  // Starting population of sharks.
+	NumFish     = 100 // Starting population of fish.
+	fishBreed   = 50  // Steps required for fish to reproduce.
+	sharkBreed  = 100 // Steps required for sharks to reproduce.
+	sharkStarve = 75  // Steps before a shark starves without eating.
+	foodEnergy  = 100 // Energy gained by a shark after eating a fish.
 )
 
 var (
@@ -36,9 +32,7 @@ var (
 	cellYSize = WindowYSize / ydim  // Height of each cell in pixels.
 	recArray  [xdim][ydim]Rectangle // Grid representing the simulation world.
 	rectImg   *ebiten.Image         // Shared rectangle image used for drawing cells.
-)
 
-var (
 	fishColor  = color.RGBA{255, 255, 0, 255} // Color representing fish (yellow).
 	sharkColor = color.RGBA{255, 0, 0, 255}   // Color representing sharks (red).
 	waterColor = color.RGBA{0, 41, 58, 255}   // Color representing water (blue).
@@ -54,55 +48,75 @@ type Rectangle struct {
 }
 
 // Game implements the Ebiten Game interface for the Wa-Tor simulation.
-type Game struct{}
+type Game struct {
+	frameCount int
+	tpsSum     float64
+	csvWriter  *csv.Writer
+}
 
-// Update updates the state of the simulation.
-//
-// Update is called once per frame. It moves fish and sharks, updates their
-// states, and handles reproduction and starvation logic.
+// Update updates the state of the simulation and logs data to CSV.
 func (g *Game) Update() error {
-	var wg sync.WaitGroup
+	g.frameCount++
+	currentTPS := ebiten.ActualTPS()
+	g.tpsSum += currentTPS
 
-	rowsPerThread := xdim / threads // Split the rows into sections based on the number of threads
-	for t := 0; t < threads; t++ {
-		startRow := t * rowsPerThread
-		endRow := (t + 1) * rowsPerThread
-		if t == threads-1 { // Handle the remaining rows for the last thread
-			endRow = xdim
+	// Check if csvWriter is not nil before writing
+	if g.csvWriter != nil {
+		err := g.csvWriter.Write([]string{
+			strconv.Itoa(g.frameCount),
+			fmt.Sprintf("%.2f", currentTPS),
+		})
+		if err != nil {
+			fmt.Println("Error writing to CSV:", err)
 		}
-
-		wg.Add(1)
-		go func(startRow, endRow int) {
-			defer wg.Done()
-			// Process the rows assigned to this goroutine
-			for i := startRow; i < endRow; i++ {
-				for k := 0; k < ydim; k++ {
-					rect := &recArray[i][k]
-					if rect.color == fishColor {
-						moveFish(i, k)
-					} else if rect.color == sharkColor {
-						if rect.starve > 0 {
-							moveShark(i, k)
-						} else {
-							// Shark starves and the cell becomes water.
-							rect.color = waterColor
-							rect.starve = 0
-							rect.breed = 0
-						}
-					}
-				}
-			}
-		}(startRow, endRow)
 	}
 
-	wg.Wait() // Wait for all goroutines to finish
+	// Use two threads to update the grid concurrently
+	var wg sync.WaitGroup
+	midY := ydim / 2
+
+	// Process the top half of the grid
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < xdim; i++ {
+			for k := 0; k < midY; k++ {
+				updateCell(i, k)
+			}
+		}
+	}()
+
+	// Process the bottom half of the grid
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < xdim; i++ {
+			for k := midY; k < ydim; k++ {
+				updateCell(i, k)
+			}
+		}
+	}()
+
+	wg.Wait() // Wait for both goroutines to finish
 
 	return nil
 }
 
+// updateCell updates the state of a single cell based on its contents.
+func updateCell(i, k int) {
+	rect := &recArray[i][k]
+	if rect.color == fishColor {
+		moveFish(i, k)
+	} else if rect.color == sharkColor {
+		if rect.starve > 0 {
+			moveShark(i, k)
+		} else {
+			rect.color = waterColor // Shark starves and the cell becomes water.
+		}
+	}
+}
+
 // Draw draws the simulation grid to the screen.
-//
-// Each cell is drawn with its current color, representing fish, sharks, or water.
 func (g *Game) Draw(screen *ebiten.Image) {
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
@@ -111,29 +125,25 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw a background rectangle for the TPS display
-	tpsBackground := ebiten.NewImage(120, 30)    // Width: 120px, Height: 30px
-	tpsBackground.Fill(color.RGBA{0, 0, 0, 180}) // Semi-transparent black background
+	tpsBackground := ebiten.NewImage(120, 30)
+	tpsBackground.Fill(color.RGBA{0, 0, 0, 180})
 
 	// Draw the background rectangle at a fixed position
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(10, 10) // Position at (10, 10)
+	op.GeoM.Translate(10, 10)
 	screen.DrawImage(tpsBackground, op)
 
 	// Draw the TPS text over the background
 	msg := fmt.Sprintf("TPS: %.2f", ebiten.ActualTPS())
-	ebitenutil.DebugPrintAt(screen, msg, 20, 20) // Position text within the background
+	ebitenutil.DebugPrintAt(screen, msg, 20, 20)
 }
 
 // Layout defines the layout of the game window.
-//
-// Layout returns the width and height of the game window in pixels.
 func (g *Game) Layout(_, _ int) (int, int) {
 	return WindowXSize, WindowYSize
 }
 
 // drawRectangle draws a single rectangle to the screen.
-//
-// The rectangle's color is used to represent its state (fish, shark, or water).
 func drawRectangle(screen *ebiten.Image, rect Rectangle) {
 	rectImg.Fill(rect.color)
 	op := &ebiten.DrawImageOptions{}
@@ -154,7 +164,7 @@ func placeEntities(num int, entityColor color.Color) {
 		if rect.color == waterColor {
 			recArray[x][y].color = entityColor
 			if entityColor == sharkColor {
-				recArray[x][y].starve = sharkStarve // Initialize shark's starvation counter.
+				recArray[x][y].starve = foodEnergy // Initialize shark's starvation counter.
 			}
 			recArray[x][y].breed = 0 // Initialize breeding counter.
 			count++
@@ -193,9 +203,6 @@ func moveFish(x, y int) {
 		recArray[x][y].color = waterColor
 		recArray[newX][newY].breed = recArray[x][y].breed + 1
 		recArray[x][y].breed = 0
-	} else {
-		// If can't move, just increment breed counter
-		recArray[x][y].breed++
 	}
 	if recArray[newX][newY].breed == fishBreed {
 		recArray[x][y].color = fishColor
@@ -215,27 +222,16 @@ func moveShark(x, y int) {
 		if recArray[newX][newY].color == waterColor {
 			recArray[newX][newY].color = sharkColor
 			recArray[newX][newY].starve = recArray[x][y].starve - 1
-			recArray[newX][newY].breed = recArray[x][y].breed + 1
 			recArray[x][y].color = waterColor
 			recArray[x][y].starve = 0
-			recArray[x][y].breed = 0
-		} else {
-			// If can't move, decrease starve counter
-			recArray[x][y].starve--
-			recArray[x][y].breed++
 		}
 	} else {
-		// Eat the fish
 		eatFish(newX, newY)
-		recArray[newX][newY].breed = recArray[x][y].breed + 1
-		recArray[newX][newY].starve = sharkStarve
 		recArray[x][y].color = waterColor
-		recArray[x][y].starve = 0
-		recArray[x][y].breed = 0
 	}
-
-	if recArray[newX][newY].breed >= sharkBreed {
-		// Reproduce
+	recArray[newX][newY].breed = recArray[x][y].breed + 1
+	recArray[x][y].breed = 0
+	if recArray[newX][newY].breed == sharkBreed {
 		recArray[x][y].color = sharkColor
 		recArray[x][y].breed = 0
 		recArray[x][y].starve = sharkStarve
@@ -270,16 +266,14 @@ func eatFish(x, y int) {
 	if recArray[x][y].color == fishColor {
 		recArray[x][y].color = sharkColor
 		recArray[x][y].starve = sharkStarve
-		recArray[x][y].breed = 0
 	}
 }
 
 // main initializes the simulation and runs the game loop.
 func main() {
-	runtime.GOMAXPROCS(threads) // Set the number of threads for simulation.
-
 	rectImg = ebiten.NewImage(cellXSize, cellYSize) // Initialize shared rectangle image.
-	// Initialize the grid.
+
+	// Initialize the grid
 	for i := 0; i < xdim; i++ {
 		for k := 0; k < ydim; k++ {
 			recArray[i][k] = Rectangle{
@@ -295,9 +289,25 @@ func main() {
 	placeEntities(NumFish, fishColor)   // Place initial fish.
 	placeEntities(NumShark, sharkColor) // Place initial sharks.
 
-	game := &Game{}
+	// Create and open the CSV file
+	file, err := os.Create("../tps_data.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	csvWriter := csv.NewWriter(file)
+	defer csvWriter.Flush()
+
+	// Write the header row to the CSV file
+	csvWriter.Write([]string{"Frame", "TPS"})
+
+	// Create the Game instance with csvWriter
+	game := &Game{csvWriter: csvWriter}
 	ebiten.SetWindowSize(WindowXSize, WindowYSize)
 	ebiten.SetWindowTitle("Go Wa-Tor World")
+
+	// Run the game loop
 	if err := ebiten.RunGame(game); err != nil {
 		panic(err)
 	}

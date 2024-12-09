@@ -82,3 +82,37 @@ cd Wa-Tor</code></pre>
   </li>
 </ol>
 
+
+<h2>How to Set Up a Virtual Environment and Install Dependencies</h2>
+<ul>
+  <li><strong>Step 1: Create a Virtual Environment</strong>
+    <ul>
+      <li>On Windows:
+        <pre><code>python -m venv venv</code></pre>
+      </li>
+      <li>On macOS and Linux:
+        <pre><code>python3 -m venv venv</code></pre>
+      </li>
+    </ul>
+  </li>
+
+  <li><strong>Step 2: Activate the Virtual Environment</strong>
+    <ul>
+      <li>On Windows:
+        <pre><code>venv\Scripts\activate</code></pre>
+      </li>
+      <li>On macOS and Linux:
+        <pre><code>source venv/bin/activate</code></pre>
+      </li>
+    </ul>
+  </li>
+
+  <li><strong>Step 3: Install Dependencies from <code>requirements.txt</code></strong>
+    <ul>
+      <li>Run the following command to install all dependencies:
+        <pre><code>pip install -r requirements.txt</code></pre>
+      </li>
+    </ul>
+  </li>
+</ul>
+

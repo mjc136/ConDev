@@ -1,4 +1,4 @@
-package main
+package wator2
 
 import (
 	"encoding/csv"

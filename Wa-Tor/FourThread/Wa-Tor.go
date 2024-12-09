@@ -15,16 +15,15 @@ import (
 
 // Simulation parameters.
 const (
-	xdim        = 100 // Grid width.
-	ydim        = 100 // Grid height.
-	WindowXSize = 800 // Window width in pixels.
-	WindowYSize = 600 // Window height in pixels.
-	NumShark    = 15  // Starting population of sharks.
-	NumFish     = 100 // Starting population of fish.
-	fishBreed   = 50  // Steps required for fish to reproduce.
-	sharkBreed  = 100 // Steps required for sharks to reproduce.
-	sharkStarve = 75  // Steps before a shark starves without eating.
-	foodEnergy  = 100 // Energy gained by a shark after eating a fish.
+	xdim        = 150  // Grid width.
+	ydim        = 150  // Grid height.
+	WindowXSize = 750  // Window width in pixels.
+	WindowYSize = 600  // Window height in pixels.
+	NumShark    = 15   // Starting population of sharks.
+	NumFish     = 1000 // Starting population of fish.
+	fishBreed   = 5    // Steps required for fish to reproduce.
+	sharkBreed  = 10   // Steps required for sharks to reproduce.
+	sharkStarve = 7    // Steps before a shark starves without eating.
 )
 
 var (
@@ -189,7 +188,7 @@ func placeEntities(num int, entityColor color.Color) {
 		if rect.color == waterColor {
 			recArray[x][y].color = entityColor
 			if entityColor == sharkColor {
-				recArray[x][y].starve = foodEnergy // Initialize shark's starvation counter.
+				recArray[x][y].starve = sharkBreed // Initialize shark's starvation counter.
 			}
 			recArray[x][y].breed = 0 // Initialize breeding counter.
 			count++

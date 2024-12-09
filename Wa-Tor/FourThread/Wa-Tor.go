@@ -66,7 +66,7 @@ func (g *Game) Update() error {
 		err := g.csvWriter.Write([]string{
 			strconv.Itoa(g.frameCount),
 			fmt.Sprintf("%.2f", currentTPS),
-			strconv.Itoa(g.threadCount), // Log the thread count
+			strconv.Itoa(g.threadCount),
 		})
 		if err != nil {
 			fmt.Println("Error writing to CSV:", err)
@@ -76,30 +76,53 @@ func (g *Game) Update() error {
 	// Use two threads to update the grid concurrently
 	var wg sync.WaitGroup
 	midY := ydim / 2
+	midX := xdim / 2
 
-	// Process the top half of the grid
+	// Process the top-left of the grid
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < xdim; i++ {
+		for i := 0; i < midX; i++ {
 			for k := 0; k < midY; k++ {
 				updateCell(i, k)
 			}
 		}
 	}()
 
-	// Process the bottom half of the grid
+	// Process the top-right of the grid
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < xdim; i++ {
+		for i := midX; i < xdim; i++ {
+			for k := 0; k < midY; k++ {
+				updateCell(i, k)
+			}
+		}
+	}()
+
+	// Process the bottom-left of the grid
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < midX; i++ {
 			for k := midY; k < ydim; k++ {
 				updateCell(i, k)
 			}
 		}
 	}()
 
-	wg.Wait() // Wait for both goroutines to finish
+	// Process the bottom-right of the grid
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := midX; i < xdim; i++ {
+			for k := midY; k < ydim; k++ {
+				updateCell(i, k)
+			}
+		}
+	}()
+
+	wg.Wait() // Wait for all 4 goroutines to complete
 
 	return nil
 }
@@ -305,7 +328,7 @@ func main() {
 	csvWriter.Write([]string{"Frame", "TPS", "ThreadCount"})
 
 	// Create the Game instance with csvWriter
-	game := &Game{csvWriter: csvWriter, threadCount: 2}
+	game := &Game{csvWriter: csvWriter, threadCount: 4}
 	ebiten.SetWindowSize(WindowXSize, WindowYSize)
 	ebiten.SetWindowTitle("Go Wa-Tor World")
 

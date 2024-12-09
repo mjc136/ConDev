@@ -50,9 +50,10 @@ type Rectangle struct {
 
 // Game implements the Ebiten Game interface for the Wa-Tor simulation.
 type Game struct {
-	frameCount int
-	tpsSum     float64
-	csvWriter  *csv.Writer
+	frameCount  int
+	tpsSum      float64
+	csvWriter   *csv.Writer
+	threadCount int
 }
 
 // Update updates the state of the simulation and logs data to CSV.
@@ -66,6 +67,7 @@ func (g *Game) Update() error {
 		err := g.csvWriter.Write([]string{
 			strconv.Itoa(g.frameCount),
 			fmt.Sprintf("%.2f", currentTPS),
+			strconv.Itoa(g.threadCount), // Log the thread count
 		})
 		if err != nil {
 			fmt.Println("Error writing to CSV:", err)
@@ -263,7 +265,7 @@ func main() {
 	placeEntities(NumShark, sharkColor) // Place initial sharks.
 
 	// Create and open the CSV file
-	file, err := os.Create("../tps_data.csv")
+	file, err := os.Create("tps_data.csv")
 	if err != nil {
 		panic(err)
 	}
@@ -273,10 +275,10 @@ func main() {
 	defer csvWriter.Flush()
 
 	// Write the header row to the CSV file
-	csvWriter.Write([]string{"Frame", "TPS"})
+	csvWriter.Write([]string{"Frame", "TPS", "ThreadCount"})
 
 	// Create the Game instance with csvWriter
-	game := &Game{csvWriter: csvWriter}
+	game := &Game{csvWriter: csvWriter, threadCount: 1}
 	ebiten.SetWindowSize(WindowXSize, WindowYSize)
 	ebiten.SetWindowTitle("Go Wa-Tor World")
 	if err := ebiten.RunGame(game); err != nil {
